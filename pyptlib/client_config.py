@@ -7,7 +7,7 @@ Low-level parts of pyptlib that are only useful to clients.
 
 from pyptlib.config import Config, ProxyError, get_env
 from pyptlib import util
-from urlparse import urlsplit
+from urllib.parse import urlsplit
 
 SUPPORTED_PROXY_SCHEMES = ['http', 'socks4a', 'socks5']
 
@@ -67,7 +67,7 @@ class ClientConfig(Config):
 def parseProxyURI(uri_str):
     try:
         uri = urlsplit(uri_str, allow_fragments=False)
-    except Exception, e:
+    except Exception as e:
         raise ProxyError("Error parsing proxy URI (%s)" % uri_str)
 
     if not uri.scheme in SUPPORTED_PROXY_SCHEMES:
