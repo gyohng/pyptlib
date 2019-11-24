@@ -83,7 +83,7 @@ def get_env(key, validate=env_has_k):
         return validate(key, os.getenv(key))
     except ProxyError:
         raise
-    except Exception, e:
+    except Exception as e:
         raise EnvError("error parsing env-var: %s: %s" % (key, e), e)
 
 class ProxyError(Exception):

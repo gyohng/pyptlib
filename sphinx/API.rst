@@ -60,7 +60,7 @@ now do:
    client = ClientTransportPlugin()
    try:
        client.init(supported_transports=["rot13", "rot26"])
-   except EnvError, err:
+   except EnvError as err:
        print "pyptlib could not bootstrap ('%s')." % str(err)
 
 Afterwards, the API's ``config`` attribute provides methods to find

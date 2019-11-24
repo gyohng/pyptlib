@@ -12,7 +12,7 @@ if __name__ == '__main__':
     client = ClientTransportPlugin()
     try:
         client.init(["blackfish", "bluefish"])
-    except EnvError, err:
+    except EnvError as err:
         print "pyptlib could not bootstrap ('%s')." % str(err)
         sys.exit(1)
 
@@ -23,7 +23,7 @@ if __name__ == '__main__':
 
         try:
             socks_version, bind_addrport = your_function_that_launches_transports(transport)
-        except YourFailException, err:
+        except YourFailException as err:
             reportFailure(transport, "Failed to launch ('%s')." % str(err))
             continue
 

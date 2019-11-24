@@ -56,10 +56,10 @@ class TransportPlugin(object):
         """
         try:
             return self.configType.fromEnv()
-        except ProxyError, e:
+        except ProxyError as e:
             self.emit('PROXY-ERROR %s' % str(e))
             raise EnvError(str(e))
-        except EnvError, e:
+        except EnvError as e:
             self.emit('ENV-ERROR %s' % str(e))
             raise e
 
