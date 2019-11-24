@@ -5,7 +5,19 @@
 Parts of pyptlib that are useful both to clients and servers.
 """
 
-import os, sys
+import os
+
+SUPPORTED_TRANSPORT_VERSIONS = ['1']
+
+def env_has_k(k, v):
+    """
+    Default validator for :func:`get_env`.
+
+    :returns: str -- The value of the envvar `k` if it is set.
+    :raises: :class:`ValueError` if `k` was not found.
+    """
+    if v is None: raise ValueError('Missing environment variable %s' % k)
+    return v
 
 class Config(object):
     """
@@ -15,27 +27,19 @@ class Config(object):
     :var list managedTransportVer: List of managed-proxy protocol versions that Tor supports.
     :var list transports: Strings of pluggable transport names that Tor wants us to handle.
     :var bool allTransportsEnabled: True if Tor wants us to spawn all the transports.
-
-    :raises: :class:`pyptlib.config.EnvError` if environment was incomplete or corrupted.
     """
 
-    stateLocation = None  # TOR_PT_STATE_LOCATION
-    managedTransportVer = []  # TOR_PT_MANAGED_TRANSPORT_VER
-    transports = []  # TOR_PT_SERVER_TRANSPORTS or TOR_PT_CLIENT_TRANSPORTS
-    allTransportsEnabled = False
-
-    def __init__(self):
-        self.stateLocation = self.get('TOR_PT_STATE_LOCATION')
-        self.managedTransportVer = self.get('TOR_PT_MANAGED_TRANSPORT_VER').split(',')
-
-    def checkClientMode(self):
-        """
-        Check whether Tor wants us to run as a client or as a server.
-
-        :returns: bool -- True if Tor wants us to run as a client.
-        """
-
-        return self.check('TOR_PT_CLIENT_TRANSPORTS')
+    def __init__(self, stateLocation,
+                 managedTransportVer=None,
+                 transports=None):
+        self.stateLocation = stateLocation
+        self.managedTransportVer = managedTransportVer or SUPPORTED_TRANSPORT_VERSIONS
+        transports = transports or []
+        self.allTransportsEnabled = False
+        if '*' in transports:
+            self.allTransportsEnabled = True
+            transports.remove('*')
+        self.transports = transports
 
     def getStateLocation(self):
         """
@@ -51,17 +55,6 @@ class Config(object):
 
         return self.managedTransportVer
 
-    def checkManagedTransportVersion(self, version):
-        """
-        Check if Tor supports a specific managed-proxy protocol version.
-
-        :param string version: A managed-proxy protocol version.
-
-        :returns: bool -- True if version is supported.
-        """
-
-        return version in self.managedTransportVer
-
     def getAllTransportsEnabled(self):
         """
         Check if Tor wants the application to spawn all its transpotrs.
@@ -71,85 +64,58 @@ class Config(object):
 
         return self.allTransportsEnabled
 
-    def checkTransportEnabled(self, transport):
-        """
-        Check if Tor wants the application to spawn a specific transport.
+def get_env(key, validate=env_has_k):
+    """
+    Get the value of an environment variable.
 
-        :param string transport: The name of a pluggable transport.
+    :param str key: Environment variable key.
+    :param f validate: Function that takes a `var` and a `value`, and returns
+        a (maybe transformed) value if it is valid, or throws an exception.
+        If the environment does not set `var`, `value` is passed in as `None`.
+        The default validator is :func:`env_has_k` which passes any value
+        which is set (i.e. not `None`).
 
-        :returns: bool -- True if Tor wants the application to spawn that transport.
-        """
+    :returns: str -- The value of the envrionment variable.
+    :raises: :class:`pyptlib.config.EnvError` if environment variable could not be
+            found, or if it did not pass validation.
+    """
+    try:
+        return validate(key, os.getenv(key))
+    except ProxyError:
+        raise
+    except Exception, e:
+        raise EnvError("error parsing env-var: %s: %s" % (key, e), e)
 
-        return self.allTransportsEnabled or transport in self.transports
+class ProxyError(Exception):
+    """
+    Thrown when the proxy specifier is incomplete or corrupted.
+    """
+    def __init__(self, message=None, cause=None):
+        self.message = message
+        self.cause = cause
 
-    def writeEnvError(self, message):  # ENV-ERROR
-        """
-        Announce that an error occured while parsing the environment.
-
-        :param str message: Error message.
-        """
-
-        self.emit('ENV-ERROR %s' % message)
-
-    def writeVersion(self, version):  # VERSION
-        """
-        Announce that a specific managed-proxy protocol version is supported.
-
-        :param str version: A managed-proxy protocol version.
-        """
-
-        self.emit('VERSION %s' % version)
-
-    def writeVersionError(self):  # VERSION-ERROR
-        """
-        Announce that we could not find a supported managed-proxy
-        protocol version.
-        """
-
-        self.emit('VERSION-ERROR no-version')
-
-    def check(self, key):
-        """
-        Check the environment for a specific environment variable.
-
-        :param str key: Environment variable key.
-
-        :returns: bool -- True if the environment variable is set.
-        """
-
-        return key in os.environ
-
-    def get(self, key):
-        """
-        Get the value of an environment variable.
-
-        :param str key: Environment variable key.
-
-        :returns: str -- The value of the envrionment variable.
-
-        :raises: :class:`pyptlib.config.EnvError` if environment
-        variable could not be found.
-        """
-
-        if key in os.environ:
-            return os.environ[key]
-        else:
-            message = 'Missing environment variable %s' % key
-            self.writeEnvError(message)
-            raise EnvError(message)
-
-    def emit(self, msg):
-        """
-        Announce a message.
-
-        :param str msg: A message.
-        """
-
-        print msg
-        sys.stdout.flush()
+    def __str__(self):
+        return self.message or self.cause.message
 
 class EnvError(Exception):
     """
     Thrown when the environment is incomplete or corrupted.
     """
-    pass
+    def __init__(self, message=None, cause=None):
+        self.message = message
+        self.cause = cause
+
+    def __str__(self):
+        return self.message or self.cause.message
+
+def checkClientMode():
+    """
+    Read the environment and return true if we are supposed to be a
+    client. Return false if we are supposed to be a server.
+
+    :raises: :class:`pyptlib.config.EnvError` if the environment was not
+             properly set up
+    """
+    if 'TOR_PT_CLIENT_TRANSPORTS' in os.environ: return True
+    if 'TOR_PT_SERVER_TRANSPORTS' in os.environ: return False
+    raise EnvError('neither TOR_PT_{SERVER,CLIENT}_TRANSPORTS set')

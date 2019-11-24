@@ -5,111 +5,85 @@
 Public server-side pyptlib API.
 """
 
-from pyptlib.config import EnvError
+from pyptlib.core import TransportPlugin
 from pyptlib.server_config import ServerConfig
 
 
+class ServerTransportPlugin(TransportPlugin):
+    """
+    Runtime process for a server TransportPlugin.
+    """
+    configType = ServerConfig
+    methodName = 'SMETHOD'
+
+    def reportMethodSuccess(self, name, addrport, options):
+        """
+        Write a message to stdout announcing that a server transport was
+        successfully launched.
+
+        :param str name: Name of transport.
+        :param tuple addrport: (addr,port) where this transport is listening for connections.
+        :param str options: String containting comma-separated
+                            transport options in key=value form (as
+                            they appear in the ARGS: SMETHOD option)
+        """
+
+        extra = ""
+        if options:
+            extra = " ARGS:%s" % options
+        elif self.config.serverTransportOptions:
+            optlist = []
+
+            # self.config.serverTransportOptions looks like this:
+            # {'obfs3': {'k':'v'}, 'scramblesuit': {'k2' : 'v2', 'k' : 'v'} }
+            for transport_name, options_dict in self.config.serverTransportOptions.items():
+                if transport_name != name:
+                    continue
+
+                for k, v in options_dict.items():
+                    optlist.append("%s=%s" % (k,v))
+            extra = " ARGS:%s" % (",".join(optlist))
+
+        self.emit('SMETHOD %s %s:%s%s' % (name, addrport[0], addrport[1], extra))
+
+    def getBindAddresses(self):
+        """
+        :returns: dict of names of the transports that this plugin can serve,
+            each mapped to the (ip,port) where the transport should bind.
+        :raises: :class:`ValueError` if called before :func:`init`.
+        """
+        return dict((k, v)
+                    for k, v in self.config.serverBindAddr.iteritems()
+                    if k in self.getTransports())
+
+
 def init(supported_transports):
-    """
-    Bootstrap server-side managed-proxy mode.
-
-    *Call in the beginning of your application.*
-
-    :param list supported_transports: Names of the transports that the application supports.
-
-    :returns: dictionary that contains information for the application:
-
-	    ===============   ========== ==========
-	    Key               Type       Value
-	    ================  ========== ==========
-	    state_loc         string     Directory where the managed proxy should dump its state files (if needed).
-	    orport            tuple      (ip,port) tuple pointing to Tor's ORPort.
-	    ext_orport        tuple      (ip,port) tuple pointing to Tor's Extended ORPort. None if Extended ORPort is not supported.
-	    transports        dict       A dictionary 'transport => (ip,port)' where 'transport' is the name of the transport that should be spawned, and '(ip,port)' is the location where the transport should bind. The dictionary can be empty.
-            auth_cookie_file  string     Directory where the managed proxy should find the Extended ORPort authentication cookie.
-	    ================  ========== ==========
-
-    :raises: :class:`pyptlib.config.EnvError` if environment was incomplete or corrupted.
-    """
-
-    supportedTransportVersion = '1'
-
-    config = ServerConfig()
-
-    if config.checkManagedTransportVersion(supportedTransportVersion):
-        config.writeVersion(supportedTransportVersion)
-    else:
-        config.writeVersionError()
-        raise EnvError("Unsupported managed proxy protocol version (%s)" %
-                           str(config.getManagedTransportVersions()))
-
+    """DEPRECATED. Use ServerTransportPlugin().init() instead."""
+    server = ServerTransportPlugin()
+    server.init(supported_transports)
+    config = server.config
     retval = {}
     retval['state_loc'] = config.getStateLocation()
     retval['orport'] = config.getORPort()
     retval['ext_orport'] = config.getExtendedORPort()
-    retval['transports'] = _getTransportsDict(supported_transports, config)
+    retval['transports'] = server.getBindAddresses()
     retval['auth_cookie_file'] = config.getAuthCookieFile()
 
     return retval
 
 def reportSuccess(name, addrport, options):
-    """
-    Report that a server transport was launched succesfully.
-
-    *Always call after successfully launching a transport.*
-
-    :param str name: Name of transport.
-    :param tuple addrport: (addr,port) where this transport is listening for connections.
-    :param str options: Transport options.
-    """
-
-    config = ServerConfig()
-    config.writeMethod(name, addrport, options)
+    """DEPRECATED. Use ClientTransportPlugin().reportMethodSuccess() instead."""
+    config = ServerTransportPlugin()
+    config.reportMethodSuccess(name, addrport, options)
 
 
 def reportFailure(name, message):
-    """
-    Report that a server transport failed to launch.
-
-    *Always call after failing to launch a transport.*
-
-    :param str name: Name of transport.
-    :param str message: Error message.
-    """
-
-    config = ServerConfig()
-    config.writeMethodError(name, message)
+    """DEPRECATED. Use ClientTransportPlugin().reportMethodError() instead."""
+    config = ServerTransportPlugin()
+    config.reportMethodError(name, message)
 
 
 def reportEnd():
-    """
-    Report that we are done launching transports.
-
-    *Call after you have launched all the transports you could launch.*
-    """
-
-    config = ServerConfig()
-    config.writeMethodEnd()
-
-def _getTransportsDict(supported_transports, config):
-    """
-    Figure out which transports the application should launch, based on
-    the transports it supports and on the transports that Tor wants it
-    to spawn.
-
-    :param list supported_transports: Transports that the application supports.
-    :param :class:`pyptlib.client_config.ClientConfig` config: Configuration of Tor.
-
-    :returns: A dictionary of 'transport => bind address' of transports that the application should launch.
-    """
-    transports = {}
-
-    if config.getAllTransportsEnabled():
-        return config.getServerBindAddresses()
-
-    for transport in config.getServerTransports():
-        if transport in supported_transports:
-            assert(transport in config.getServerBindAddresses())
-            transports[transport] = config.getServerBindAddresses()[transport]
-
-    return transports
+    """DEPRECATED. Use ClientTransportPlugin().reportMethodsEnd() instead."""
+    config = ServerTransportPlugin()
+    config.reportMethodsEnd()

@@ -5,106 +5,91 @@
 Public client-side pyptlib API.
 """
 
-from pyptlib.config import EnvError
+from pyptlib.core import TransportPlugin
 from pyptlib.client_config import ClientConfig
 
+
+class ClientTransportPlugin(TransportPlugin):
+    """
+    Runtime process for a client TransportPlugin.
+    """
+    configType = ClientConfig
+    methodName = 'CMETHOD'
+    reportedProxy = False
+
+    def reportMethodSuccess(self, name, protocol, addrport, args=None, optArgs=None):
+        """
+        Write a message to stdout announcing that a transport was
+        successfully launched.
+
+        :param str name: Name of transport.
+        :param str protocol: Name of protocol to communicate using.
+        :param tuple addrport: (addr,port) where this transport is listening for connections.
+        :param str args: ARGS field for this transport.
+        :param str optArgs: OPT-ARGS field for this transport.
+        """
+
+        methodLine = 'CMETHOD %s %s %s:%s' % (name, protocol,
+                addrport[0], addrport[1])
+        if args and len(args) > 0:
+            methodLine = methodLine + ' ARGS=' + args.join(',')
+        if optArgs and len(optArgs) > 0:
+            methodLine = methodLine + ' OPT-ARGS=' + args.join(',')
+        self.emit(methodLine)
+
+    def reportProxySuccess(self):
+        """
+        Write a message to stdout announcing that the specified proxy will be
+        used.
+        """
+
+        if not self.config.proxy:
+            raise RuntimeError("reportProxySuccess() when no proxy specified")
+        elif self.reportedProxy:
+            raise RuntimeError("reportProxySuccess() after status already reported")
+        else:
+            self.reportedProxy = True
+            self.emit("PROXY DONE")
+
+    def reportProxyError(self, msg=None):
+        """
+        Write a message to stdout announcing that the specified proxy can not be
+        used.
+        """
+
+        if not self.config.proxy:
+            raise RuntimeError("reportProxyError() when no proxy specified")
+        elif self.reportedProxy:
+            raise RuntimeError("reportProxyError() after status already reported")
+        else:
+            self.reportedProxy = True
+            proxyLine = 'PROXY-ERROR'
+            if msg and len(msg) > 0:
+                proxyLine += ' ' + msg
+            self.emit(proxyLine)
+
 def init(supported_transports):
-    """
-    Bootstrap client-side managed-proxy mode.
+    """DEPRECATED. Use ClientTransportPlugin().init() instead."""
+    client = ClientTransportPlugin()
 
-    *Call in the beginning of your application.*
-
-    :param list supported_transports: Names of the transports that the application supports.
-
-    :returns: dictionary that contains information for the application.
-
-	    ==========  ========== ==========
-	    Key         Type       Value
-	    ==========  ========== ==========
-	    state_loc   string     Directory where the managed proxy should dump its state files (if needed).
-	    transports  list       Strings of the names of the transports that should be launched. The list can be empty.
-	    ==========  ========== ==========
-
-    :raises: :class:`pyptlib.config.EnvError` if environment was incomplete or corrupted.
-    """
-
-    supportedTransportVersion = '1'
-
-    config = ClientConfig()
-
-    if config.checkManagedTransportVersion(supportedTransportVersion):
-        config.writeVersion(supportedTransportVersion)
-    else:
-        config.writeVersionError()
-        raise EnvError("Unsupported managed proxy protocol version (%s)" %
-                           str(config.getManagedTransportVersions()))
-
+    client.init(supported_transports)
     retval = {}
-    retval['state_loc'] = config.getStateLocation()
-    retval['transports'] = _getTransportsList(supported_transports, config)
+    retval['state_loc'] = client.config.getStateLocation()
+    retval['transports'] = client.getTransports()
 
     return retval
 
 def reportSuccess(name, socksVersion, addrport, args=None, optArgs=None):
-    """
-    Report that a client transport was launched succesfully.
-
-    *Always call after successfully launching a transport.*
-
-    :param str name: Name of transport.
-    :param int socksVersion: The SOCKS protocol version.
-    :param tuple addrport: (addr,port) where this transport is listening for connections.
-    :param str args: ARGS field for this transport.
-    :param str args: OPT-ARGS field for this transport.
-    """
-
-    config = ClientConfig()
-    config.writeMethod(name, socksVersion, addrport, args, optArgs)
-
+    """DEPRECATED. Use ClientTransportPlugin().reportMethodSuccess() instead."""
+    config = ClientTransportPlugin()
+    config.reportMethodSuccess(name, "socks%s" % socksVersion, addrport, args, optArgs)
 
 def reportFailure(name, message):
-    """
-    Report that a client transport failed to launch.
-
-    *Always call after failing to launch a transport.*
-
-    :param str name: Name of transport.
-    :param str message: Error message.
-    """
-
-    config = ClientConfig()
-    config.writeMethodError(name, message)
-
+    """DEPRECATED. Use ClientTransportPlugin().reportMethodError() instead."""
+    config = ClientTransportPlugin()
+    config.reportMethodError(name, message)
 
 def reportEnd():
-    """
-    Report that we are done launching transports.
-
-    *Call after you have launched all the transports you could launch.*
-    """
-
-    config = ClientConfig()
-    config.writeMethodEnd()
-
-def _getTransportsList(supported_transports, config):
-    """
-    Figure out which transports the application should launch, based on
-    the transports it supports and on the transports that Tor wants it
-    to spawn.
-
-    :param list supported_transports: Transports that the application supports.
-    :param :class:`pyptlib.client_config.ClientConfig` config: Configuration of Tor.
-
-    :returns: A list of transports that the application should launch.
-    """
-    transports = []
-
-    if config.getAllTransportsEnabled():
-        return supported_transports
-
-    for transport in config.getClientTransports():
-        if transport in supported_transports:
-            transports.append(transport)
-
-    return transports
-
+    """DEPRECATED. Use ClientTransportPlugin().reportMethodsEnd() instead."""
+    config = ClientTransportPlugin()
+    config.reportMethodsEnd()
